@@ -356,7 +356,6 @@ bool fillHottGpsFrame(){
     TxHottData.gpsMsg.sensorID     = HOTT_TELEMETRY_GPS_SENSOR_ID ; //0x8A
     TxHottData.gpsMsg.sensorTextID     = HOTTV4_GPS_SENSOR_TEXT_ID ; // 0xA0
     TxHottData.gpsMsg.endByte     = 0x7D ;
-    uint16_t altitudeHott = 500 ;                   // Hott uses an offset of 500 (m)
     if ( (gps.GPS_fix_type == 3 ) || (gps.GPS_fix_type == 4 ) ) {
 //                    if( GPS_latAvailable ) {             // test if data are available (GPS fix) ; if available, fill the buffer
 //                        GPS_latAvailable = false ;       // reset the flag     
@@ -384,7 +383,6 @@ bool fillHottGpsFrame(){
         TxHottData.gpsMsg.distanceLow = gps.GPS_distance ;                             // Byte 20: 027 123 = /distance low byte 6 = 6 m
         TxHottData.gpsMsg.distanceHigh = gps.GPS_distance >> 8 ;                       // Byte 21: 036 35 = /distance high byte
         TxHottData.gpsMsg.HomeDirection = gps.GPS_bearing / 2 ;                        //Byte 29: HomeDirection (direction from starting point to Model position) (1 byte) 2degree = 1
-        altitudeHott += (fields[ALTITUDE].value / 100)  ;                                 // convert from cm to m (keep the ofsset of 500 m)
         TxHottData.gpsMsg.GPSNumSat = fields[NUMSAT].value;               // Byte 27: GPS.Satelites (number of satelites) (1 byte) 
     
         //printf("gpsAlt=%d\n", (int32_t) fields[ALTITUDE].value/100);
@@ -421,15 +419,20 @@ bool fillHottGpsFrame(){
     }    
     TxHottData.gpsMsg.GPS_fix = TxHottData.gpsMsg.GPSFixChar ;
     TxHottData.gpsMsg.GPSNumSat = fields[NUMSAT].value ;
-    TxHottData.gpsMsg.altitudeLow = altitudeHott ; 
-    TxHottData.gpsMsg.altitudeHigh = altitudeHott >> 8 ;
-    uint16_t varioHott = 30000 ;
-#ifdef VARIO
-                varioHott += mainVspeed.value ;  // put vario vertical speed in GPS data
-#endif                
-    TxHottData.gpsMsg.resolutionLow = varioHott ;          //climb rate in 0.01m/s. Value of 30000 = 0.00 m/s
-    TxHottData.gpsMsg.resolutionHigh = varioHott >> 8;
-    TxHottData.gpsMsg.unknow1 = 120 ;                                       // Byte 26: 120 = 0m/3s
+
+    TxHottData.gpsMsg.baroAltitude = 500;
+    if( fields[RELATIVEALT].available )
+        TxHottData.gpsMsg.baroAltitude += int_round(fields[RELATIVEALT].value , 100);  // Baro altitude (AGL)
+
+    TxHottData.gpsMsg.baroClimbRate =  30000 ;
+    if( fields[VSPEED].available )
+        TxHottData.gpsMsg.baroClimbRate += fields[VSPEED].value;                        // Baro vertical speed
+    
+    TxHottData.gpsMsg.GPSaltitude = 0;
+    if( fields[ALTITUDE].available )                                                    // GPS altitude (MSL)
+        TxHottData.gpsMsg.GPSaltitude += fields[ALTITUDE].value / 100;
+
+    TxHottData.gpsMsg.unknow1 = 120 ;                                  // Byte 26: 120 = 0m/3s
 
     TxHottData.txBuffer[TXHOTTDATA_BUFFERSIZE-1] = 0 ;
     for(uint8_t i = 0; i < TXHOTTDATA_BUFFERSIZE-1; i++){  // one byte less because the last byte is the checksum
